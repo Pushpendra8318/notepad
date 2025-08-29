@@ -1,6 +1,6 @@
 // src/components/SignUpForm.tsx
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useContext, useState } from "react";
+import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { toast } from "react-hot-toast";
 import { z } from "zod";
@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Heading from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { UserContext } from "@/providers/user-provider";
 
 // --------------------
 // Schema & Types
@@ -38,17 +39,18 @@ interface OTPResponse {
   message: string;
 }
 
-interface SignupResponse {
-  success: boolean;
-  message: string;
-  authToken: string;
-}
+// interface SignupResponse {
+//   success: boolean;
+//   message: string;
+//   authToken: string;
+// }
 
 // --------------------
 // Component
 // --------------------
 const SignUpForm: React.FC = () => {
-  const navigate = useNavigate();
+  const { signUp } = useContext(UserContext);
+  // const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
 
@@ -88,17 +90,9 @@ const SignUpForm: React.FC = () => {
   // Signup / Verify OTP
   // --------------------
   const onSubmit = async (data: SignUpFormValues) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await axiosInstance.post<SignupResponse>("/api/auth/signup", data);
-
-      if (res.data.success) {
-        localStorage.setItem("token", res.data.authToken);
-        toast.success(res.data.message);
-        navigate("/");
-      } else {
-        toast.error(res.data.message);
-      }
+      await signUp(data);
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
       toast.error(err.response?.data?.message || err.message || "Signup failed");

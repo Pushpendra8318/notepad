@@ -65,7 +65,7 @@ router.post("/login", async (req, res) => {
       expiresIn: "1h",
     });
 
-    res.json({ success: true, authToken: token, message: "Login successful" });
+    res.json({ success: true, authToken: token, message: "Login successful",user: { name: user.fullName, email: user.email } });
 
   } catch (error) {
     console.error("Error in login:", error);
@@ -105,7 +105,7 @@ router.post("/signup", async (req, res) => {
       expiresIn: "1h",
     });
 
-    res.json({ success: true, authToken: token, message: "Signup successful" });
+    res.json({ success: true, authToken: token, message: "Signup successful" ,user: { name: user.fullName, email: user.email }});
 
   } catch (error) {
     console.error("Error in login:", error);

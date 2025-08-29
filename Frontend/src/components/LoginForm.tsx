@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useNavigate } from "react-router-dom";
+// import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/form";
 import axios, { AxiosResponse } from "axios";
 import toast from "react-hot-toast";
+import { UserContext } from "@/providers/user-provider";
 
 // ✅ Define API response type
 interface ApiResponse {
@@ -41,7 +42,8 @@ const otpSchema = z.object({
 });
 
 export default function LoginForm() {
-  const navigate = useNavigate();
+  const { logIn } = useContext(UserContext);
+  // const navigate = useNavigate();
   const [step, setStep] = useState<"email" | "otp">("email");
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -80,23 +82,12 @@ export default function LoginForm() {
 
   // STEP 2 - Verify OTP & login
   const handleOtpSubmit = async (values: z.infer<typeof otpSchema>) => {
-    try {
-      setLoading(true);
-      const res: AxiosResponse<ApiResponse> = await api.post("/auth/login", {
-        email,
-        otp: values.otp,
-      });
-
-      if (res.data.success && res.data.authToken) {
-        localStorage.setItem("token", res.data.authToken);
-        toast.success("Login successful");
-        navigate("/");
-      } else {
-        toast.error(res.data.message || "Invalid OTP");
-      }
-    } catch (err) {
-      toast.error("Server error. Please try again.");
-    } finally {
+  try {
+    await logIn({ email, otp: values.otp });
+    // navigate is already handled inside logIn
+  } catch (err) {
+    toast.error("Login failed");
+  }finally {
       setLoading(false);
     }
   };
