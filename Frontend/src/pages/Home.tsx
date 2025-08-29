@@ -1,8 +1,9 @@
-import Notes from "@/components/notes/Notes";
 
 const Home = () => {
   return (
-    <Notes />
+    <div>
+      Home
+    </div>
   );
 };
 

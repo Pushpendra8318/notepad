@@ -1,156 +1,174 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import axios, { AxiosError } from 'axios';
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import axios, { AxiosResponse } from "axios";
+import toast from "react-hot-toast";
 
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import Heading from '@/components/ui/heading';
-import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff } from 'lucide-react';
-
-const HOST = import.meta.env.VITE_HOST;
-
-const formSchema = z.object({
-    email: z.string().email('Enter a valid Email Address'),
-    password: z.string().min(6, 'Password should be atleast 8 characters').max(16, 'Password can only have a maximum of 16 characters'),
-})
-
-type LoginFormValues = z.infer<typeof formSchema>
-
-interface ErrorResponse {
-    message: string;
+// ✅ Define API response type
+interface ApiResponse {
+  success: boolean;
+  message?: string;
+  authToken?: string;
 }
 
-const LoginForm = () => {
+// ✅ Setup axios instance with baseURL
+const api = axios.create({
+  baseURL: "http://localhost:5000/api", // backend URL
+});
 
-    const navigate = useNavigate()
-    const [showPassword, setShowPassword] = useState(false)
-    const [loading, setLoading] = useState(false)
+// Zod validation schemas
+const emailSchema = z.object({
+  email: z.string().email({ message: "Invalid email address" }),
+});
 
-    const form = useForm<LoginFormValues>({
-        resolver: zodResolver(formSchema),
-        defaultValues: {
-            email: "",
-            password: ""
-        }
-    })
+const otpSchema = z.object({
+  otp: z
+    .string()
+    .length(6, { message: "OTP must be 6 digits" })
+    .regex(/^\d+$/, { message: "OTP must contain only digits" }),
+});
 
-    const onSubmit = async (data: LoginFormValues) => {
-        try {
-            setLoading(true)
-            const options = {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Login-token": localStorage.getItem("token") || "",
-                }
-            }
-            const res = await axios.post(`${HOST}/api/auth/login`, data, options)
-            localStorage.setItem("token", res.data.authToken);
+export default function LoginForm() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
 
-            toast.success(res.data.message)
-            navigate('/')
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const axiosError = error as AxiosError<ErrorResponse>;
-                if (axiosError.response && axiosError.response.data) {
-                    toast.error(axiosError.response.data.message);
-                } else {
-                    toast.error('An error occurred');
-                }
-            } else {
-                toast.error('An error occurred');
-            }
-        }
-        finally {
-            setLoading(false)
-        }
+  const emailForm = useForm<z.infer<typeof emailSchema>>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: { email: "" },
+  });
+
+  const otpForm = useForm<z.infer<typeof otpSchema>>({
+    resolver: zodResolver(otpSchema),
+    defaultValues: { otp: "" },
+  });
+
+  // STEP 1 - Send OTP
+  const handleEmailSubmit = async (values: z.infer<typeof emailSchema>) => {
+    try {
+      setLoading(true);
+      const res: AxiosResponse<ApiResponse> = await api.post("/auth/send-otp", {
+        email: values.email,
+      });
+
+      if (res.data.success) {
+        toast.success("OTP sent to your email");
+        setEmail(values.email);
+        setStep("otp");
+      } else {
+        toast.error(res.data.message || "Failed to send OTP");
+      }
+    } catch (err) {
+      toast.error("Server error. Please try again.");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-        <div className='container max-w-4xl py-4 mx-auto md:py-10'>
-            <Heading title="Login" description='Login to DevNotes' />
-            <Separator className='mt-4 mb-8' />
-            <div className='max-w-lg mx-auto'>
-                <Form {...form}>
-                    <form onSubmit={form.control.handleSubmit(onSubmit)} className='flex flex-col gap-4'>
-                        <div className='flex flex-col gap-2 md:gap-4'>
-                            <FormField
-                                control={form.control}
-                                name='email'
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Email</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                type="email"
-                                                disabled={loading}
-                                                placeholder='Email'
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name='password'
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Password</FormLabel>
-                                        <FormControl >
-                                            <div className='relative'>
-                                                <Input
-                                                    type={showPassword ? 'text' : 'password'}
-                                                    disabled={loading}
-                                                    placeholder='Password'
-                                                    {...field}
-                                                    className='pr-10'
-                                                />
-                                                <button type="button" disabled={loading} className='absolute inset-y-0 grid place-items-center right-5 opacity-80 focus:opacity-100' onClick={() => setShowPassword(prev => !prev)}>
-                                                    <EyeOff size={20} className={`${loading ? "text-input" : "text-foreground"} absolute transition-all duration-200 ${showPassword ? "scale-100" : "scale-0"}`} />
-                                                    <Eye size={20} className={`${loading ? "text-input" : "text-foreground"} absolute transition-all duration-200 ${!showPassword ? "scale-100" : "scale-0"}`} />
-                                                </button>
-                                            </div>
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
-                        <div className='flex flex-col items-start my-3 md:flex-row it md:items-center md:justify-between gap-y-3 md:gap-y-0'>
-                            <div className="flex gap-2 mr-auto">
-                                <Button
-                                    disabled={loading}
-                                    type="submit"
-                                >
-                                    Login
-                                </Button>
-                                <Button
-                                    disabled={loading}
-                                    type="reset"
-                                    onClick={() => form.reset()}
-                                >
-                                    Reset
-                                </Button>
-                            </div>
-                            <div className='sm:pr-3'>
-                                <p className='flex items-center text-base sm:text-lg text-accent-foreground/50 '>
-                                    <span>Need an Accout ?</span>
-                                    <Link to={loading ? "/login" : "/signup"} className={`pb-[2px] ml-2 text-sm sm:text-base border-b border-b-current  ${loading ? "text-input" : "text-accent-foreground/90 hover:text-accent-foreground"}`}>Sign up now!</Link>
-                                </p>
-                            </div>
-                        </div>
-                    </form>
-                </Form>
-            </div>
-        </div>
-    )
+  // STEP 2 - Verify OTP & login
+  const handleOtpSubmit = async (values: z.infer<typeof otpSchema>) => {
+    try {
+      setLoading(true);
+      const res: AxiosResponse<ApiResponse> = await api.post("/auth/login", {
+        email,
+        otp: values.otp,
+      });
+
+      if (res.data.success && res.data.authToken) {
+        localStorage.setItem("token", res.data.authToken);
+        toast.success("Login successful");
+        navigate("/");
+      } else {
+        toast.error(res.data.message || "Invalid OTP");
+      }
+    } catch (err) {
+      toast.error("Server error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-md mx-auto p-6 bg-white shadow-xl rounded-2xl">
+      {step === "email" ? (
+        <Form key="email-form" {...emailForm}>
+          <form
+            onSubmit={emailForm.handleSubmit(handleEmailSubmit)}
+            className="space-y-6"
+          >
+            <FormField
+              control={emailForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      placeholder="Enter your email"
+                      disabled={loading}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Sending..." : "Send OTP"}
+            </Button>
+          </form>
+        </Form>
+      ) : (
+        <Form key="otp-form" {...otpForm}>
+          <form
+            onSubmit={otpForm.handleSubmit(handleOtpSubmit)}
+            className="space-y-6"
+          >
+            <FormField
+              control={otpForm.control}
+              name="otp"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>OTP</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d{6}"
+                      maxLength={6}
+                      placeholder="Enter 6-digit OTP"
+                      disabled={loading}
+                      {...field}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        field.onChange(value);
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Verifying..." : "Verify OTP"}
+            </Button>
+          </form>
+        </Form>
+      )}
+    </div>
+  );
 }
-
-export default LoginForm

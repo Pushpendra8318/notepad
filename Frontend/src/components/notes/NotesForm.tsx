@@ -3,7 +3,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "react-hot-toast";
-import axios from "axios";
+import axiosInstance from "@/utils/axiosInstance";
 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -12,142 +12,109 @@ import { Button } from "@/components/ui/button";
 import { NoteContext } from "@/providers/note-provider";
 import { Note } from "@/types";
 
-const HOST = import.meta.env.VITE_HOST;
-
-
+// ------------------
+// Schema
+// ------------------
 const formSchema = z.object({
-    title: z.string().min(3, 'Title should be atleast 3 characters').max(35, 'Title can only have a maximum of 35 characters'),
-    description: z.string().min(10, 'Description should be atleast 10 characters').max(120, 'Description can only have a maximum of 120 characters'),
-    tag: z.string().min(3, "Tag should be atleast 3 characters").max(8, 'Tag can only have a maximum of 8 characters')
-})
+  title: z.string().min(3, "Title should be at least 3 characters").max(35, "Title max 35 chars"),
+  description: z.string().min(10, "Description should be at least 10 characters").max(120, "Description max 120 chars"),
+  tag: z.string().min(3, "Tag should be at least 3 characters").max(8, "Tag max 8 chars"),
+});
 
-type NoteFormValues = z.infer<typeof formSchema>
+type NoteFormValues = z.infer<typeof formSchema>;
 
 interface NotesFormProps {
-    initialData: Note | null;
-    handleSubmit: () => void;
+  initialData?: Note | null;
 }
 
-const NotesForm: FC<NotesFormProps> = ({ initialData, handleSubmit }) => {
-    const context = useContext(NoteContext);
-    const { fetchNotes } = context;
-    const [loading, setLoading] = useState(false)
+const NotesForm: FC<NotesFormProps> = ({ initialData }) => {
+  const { fetchNotes } = useContext(NoteContext);
+  const [loading, setLoading] = useState(false);
 
-    const form = useForm<NoteFormValues>({
-        resolver: zodResolver(formSchema),
-        defaultValues: initialData || {
-            title: "",
-            description: "",
-            tag: "general",
-        }
-    })
+  const form = useForm<NoteFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: initialData || { title: "", description: "", tag: "general" },
+  });
 
-    const toastMessage = initialData ? "Note Updated Successfully" : "Note Created Successfully"
-    const action = initialData ? "Save Changes" : "Create"
+  const toastMessage = initialData ? "Note Updated Successfully" : "Note Created Successfully";
+  const action = initialData ? "Save Changes" : "Create";
 
-    const onsubmit = async (data: NoteFormValues) => {
-        try {
-            setLoading(true)
-            const options = {
-                headers: {
-                    "Content-Type": "application/json",
-                    "auth-token": localStorage.getItem("token") || "",
-                }
-            }
-            if (initialData) {
-                await axios.put(`${HOST}/api/notes/updatenote/${initialData._id}`, data, options)
-            } else {
-                await axios.post(`${HOST}/api/notes/addnote`, data, options)
-            }
-            toast.success(toastMessage)
-            fetchNotes()
-        } catch (error) {
-            toast.error("Something went wrong")
-        }
-        finally {
-            setLoading(false)
-            handleSubmit()
-        }
+  const onsubmit = async (data: NoteFormValues) => {
+    try {
+      setLoading(true);
+
+      if (initialData) {
+        await axiosInstance.put(`/api/notes/updatenote/${initialData._id}`, data);
+      } else {
+        await axiosInstance.post(`/api/notes/addnote`, data);
+      }
+
+      toast.success(toastMessage);
+      fetchNotes();
+      form.reset();
+    } catch (error) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      toast.error(err.response?.data?.message || err.message || "Something went wrong");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-        <div className="container ">
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onsubmit)} className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:gap-4 md:gap-6">
-                        <FormField
-                            control={form.control}
-                            name="title"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Title</FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            disabled={loading}
-                                            placeholder='Title'
-                                            {...field}
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="tag"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Tag</FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            disabled={loading}
-                                            placeholder='Tag'
-                                            {...field}
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                    <FormField
-                        control={form.control}
-                        name="description"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Description</FormLabel>
-                                <FormControl>
-                                    <Textarea
-                                        disabled={loading}
-                                        placeholder="Description"
-                                        rows={10}
-                                        cols={10}
-                                        {...field}
-                                    />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <div className="flex gap-2 mr-auto">
-                        <Button
-                            disabled={loading}
-                            type="submit"
-                        >
-                            {action}
-                        </Button>
-                        <Button
-                            disabled={loading}
-                            type="reset"
-                            onClick={() => form.reset()}
-                        >
-                            Reset
-                        </Button>
-                    </div>
-                </form>
-            </Form>
-        </div>
-    );
+  return (
+    <div className="container">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onsubmit)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-4 md:gap-6">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Title</FormLabel>
+                  <FormControl>
+                    <Input disabled={loading} placeholder="Title" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="tag"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tag</FormLabel>
+                  <FormControl>
+                    <Input disabled={loading} placeholder="Tag" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea disabled={loading} placeholder="Description" rows={6} {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={loading}>{action}</Button>
+            <Button type="reset" disabled={loading} onClick={() => form.reset()}>Reset</Button>
+          </div>
+        </form>
+      </Form>
+    </div>
+  );
 };
 
 export default NotesForm;

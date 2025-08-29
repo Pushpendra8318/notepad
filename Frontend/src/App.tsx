@@ -10,6 +10,7 @@ import About from "@/pages/About";
 import Providers from "@/providers";
 
 import "./App.css";
+import Dashboard from "./pages/Dashboard";
 
 const App = () => {
   return (
@@ -19,6 +20,7 @@ const App = () => {
         <div className="flex-1 max-w-screen-2xl pt-[70px] mx-auto w-full">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/dashboard" element={<Dashboard/>}/>
             <Route path="/about" element={<About />} />
             <Route path="/textutils" element={<Textutils />} />
             <Route path="/signup" element={<SignUp />} />

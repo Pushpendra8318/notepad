@@ -1,45 +1,22 @@
-const connectToMongo = require("./db");
-const express = require("express");
-const cors = require("cors");
-// const path = require("path")
-require("dotenv").config();
-connectToMongo();
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import authRouter from "./routes/auth.js";
+import notesRouter from "./routes/notes.js"
+import connectDB from "./db.js";
+
+dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 5000;
-
 app.use(express.json());
-app.use(cors(
-  {
-    origin: [process.env.FRONTEND_DEV, process.env.FRONTEND],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  }
-));
+connectDB();
 
-// Available Routes
-app.use("/api/auth", require("./routes/auth"));
-app.use("/api/notes", require("./routes/notes"));
+// Allow frontend (React Vite: 5173 or CRA: 3000)
+app.use(cors());
 
+// Routes
+app.use("/api/auth", authRouter);
+app.use("/api/notes",notesRouter)
 
-if (
-  process.env.NODE_ENV === "production" ||
-  process.env.NODE_ENV === "staging"
-) {
-
-  // app.use(express.static("../Frontend/build"));
-  // const buildPath = (path.join(__dirname, "../Frontend/build"));
-  // app.use(express.static(buildPath));
-  // app.get('(/*)?', (req, res) => {
-  //   res.sendFile(path.join(buildPath, "index.html"));
-  // });
-
-  app.get('/', (req, res) => {
-    res.redirect(process.env.FRONTEND)
-  });
-}
-
-
-
-app.listen(port, () => {
-  console.log(`DevNotes Backend listening at port ${port}`);
-});
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

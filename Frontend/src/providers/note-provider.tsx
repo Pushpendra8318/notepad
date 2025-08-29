@@ -1,75 +1,85 @@
 import { FC, useState, createContext } from "react";
 import { toast } from "react-hot-toast";
-
 import { Note } from "@/types";
 
 const HOST = import.meta.env.VITE_HOST;
 
-
-
 interface InitialDataType {
-    notes: Note[] | null;
-    deleteNote: (id: string) => void;
-    fetchNotes: () => void;
+  notes: Note[] | null;
+  deleteNote: (id: string) => void;
+  fetchNotes: () => void;
 }
 
-const notes: Note[] = [];
 const initialData: InitialDataType = {
-    notes,
-    deleteNote: () => { },
-    fetchNotes: () => { },
-}
+  notes: null,
+  deleteNote: () => {},
+  fetchNotes: () => {},
+};
 
-export const NoteContext = createContext(initialData);
-
-
+export const NoteContext = createContext<InitialDataType>(initialData);
 
 interface NoteProviderProps {
-    children: React.ReactNode
+  children: React.ReactNode;
 }
 
 const NoteProvider: FC<NoteProviderProps> = ({ children }) => {
+  const [notes, setNotes] = useState<Note[] | null>(null);
 
-    const [notes, setNotes] = useState<Note[] | null>(null);
-
-    const headers: HeadersInit = {
-        "Content-Type": "application/json",
-        "auth-token": localStorage.getItem("token") || "",
+  // ✅ Attach Authorization header with Bearer token
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
     };
+  };
 
-    const fetchNotes = async () => {
-        const headers: HeadersInit = {
-            "auth-token": localStorage.getItem("token") || "",
-        }
-        const response = await fetch(`${HOST}/api/notes/fetchallnotes`, {
-            method: "GET",
-            headers
-        });
-        const json = await response.json();
-        setNotes(json.notes);
-    };
+  const fetchNotes = async () => {
+    try {
+      const response = await fetch(`${HOST}/api/notes/fetchallnotes`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
 
-    const deleteNote = async (id: string) => {
-        const response = await fetch(`${HOST}/api/notes/deletenote/${id}`, {
-            method: "DELETE",
-            headers,
-        });
-        const json = await response.json();
-        if (json.success) {
-            toast.success(json.message);
-            fetchNotes();
-        } else {
-            toast.error(json.message);
-        }
-    };
+      const json = await response.json();
 
-    return (
-        <NoteContext.Provider
-            value={{ notes, deleteNote, fetchNotes }}
-        >
-            {children}
-        </NoteContext.Provider>
-    );
+      if (response.ok) {
+        setNotes(json.notes || []);
+      } else {
+        toast.error(json.message || "Failed to fetch notes");
+      }
+    } catch (error) {
+      console.error("Error fetching notes:", error);
+      toast.error("Something went wrong while fetching notes");
+    }
+  };
+
+  const deleteNote = async (id: string) => {
+    try {
+      const response = await fetch(`${HOST}/api/notes/deletenote/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+
+      const json = await response.json();
+
+      if (response.ok && json.success) {
+        toast.success(json.message || "Note deleted successfully");
+        fetchNotes();
+      } else {
+        toast.error(json.message || "Failed to delete note");
+      }
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      toast.error("Something went wrong while deleting note");
+    }
+  };
+
+  return (
+    <NoteContext.Provider value={{ notes, deleteNote, fetchNotes }}>
+      {children}
+    </NoteContext.Provider>
+  );
 };
 
 export default NoteProvider;

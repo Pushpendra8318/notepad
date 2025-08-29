@@ -1,10 +1,14 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const { Schema } = mongoose;
 
 const usersSchema = new Schema({
-  name: {
+  fullName: {
     type: String,
+    required: true,
+  },
+  dob: {
+    type: Date,
     required: true,
   },
   email: {
@@ -12,9 +16,9 @@ const usersSchema = new Schema({
     required: true,
     unique: true,
   },
-  password: {
-    type: String,
-    required: true,
+  isVerified: {
+    type: Boolean,
+    default: false, // user verified after OTP
   },
   date: {
     type: Date,
@@ -22,4 +26,4 @@ const usersSchema = new Schema({
   },
 });
 
-module.exports = mongoose.model('users', usersSchema);
+module.exports = mongoose.model("users", usersSchema);

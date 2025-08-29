@@ -1,192 +1,116 @@
-const express = require("express");
+import express from "express";
+import jwt from "jsonwebtoken";
+import User from "../models/Users.js"; // Import the User model
+import sendMail from "../utils/sendMail.js"; // Import the sendMail utility
+
 const router = express.Router();
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const { body, validationResult } = require("express-validator");
-const User = require("../models/Users");
-const fetchuser = require("../middleware/fetchuser");
-require("dotenv").config();
-const JWT_SIGNATURE = process.env.JWT_SIGNATURE;
 
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+// Temporary OTP store (in production use DB/Redis)
+const otpStore = new Map();
 
-// ROUTE 1: Create  a User using:  POST -> "/api/auth/createuser" . Note: 'No Login Required'.
-router.post(
-  "/createuser",
-
-  [
-    body("name", "Enter a valid name").isLength({ min: 3 }),
-    body("email", "Enter a valid email").isEmail(),
-    body("password", "Password must be of minimum length 5").isLength({
-      min: 5,
-    }),
-    body("cpassword", "Password must be of minimum length 5").isLength({
-      min: 5,
-    }),
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    let success = false;
-    //  If there is any error return error 400 status with the error
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success,
-        message: "Enter Correct Credentials",
-        errors: errors.array(),
-      });
-    }
-    // Put everything inside the try block so that if any error occur then,
-    // we can handle in the catch block
-    try {
-      // Check if there exists a user with this email id
-      let user = await User.findOne({ email: req.body.email });
-      // If exists then return error with message to use different email
-      if (user) {
-        return res
-          .status(400)
-          .json({ success, message: "Email is Already Registered" });
-      }
-      if (req.body.password !== req.body.cpassword) {
-        return res
-          .status(400)
-          .json({ success, message: "Password does not match" });
-      }
-      // If the email is not already exists in the DB then
-      // make a salt of 10 characters using bcrypt
-      const salt = await bcrypt.genSalt(10);
-      // make a securepassword using hash function with password entered by user and salt
-      const securePass = await bcrypt.hash(req.body.password, salt);
-      // create a user with user data and the password
-      // which we have made in the previous step
-      user = await User.create({
-        name: req.body.name,
-        email: req.body.email,
-        password: securePass,
-      });
-      const data = {
-        user: { id: user.id },
-      };
-      // create a authtoken with the user id and your signature
-      const authToken = jwt.sign(data, JWT_SIGNATURE);
-      // Now return the auth token
-      success = true;
-      return res.json({
-        success,
-        message: "User Registered Successfully",
-        authToken,
-      });
-      // res.json({ 'OK 200': 'User data successfully added','data':user });
-    } catch (error) {
-      // If any error occured then return status 500 with message Internal Server error
-      console.log(error.message);
-      return res.status(500).json({
-        success,
-        message: "Internal Server Error",
-        errors: error.messsage,
-      });
-    }
+// POST /api/auth/send-otp
+router.post("/send-otp", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ success: false, message: "Email required" });
   }
-);
 
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
-
-// ROUTE 2: Authenticate a User  using:  POST -> "/api/auth/login" . Note: 'No Login Required'.
-
-router.post(
-  "/login",
-  [
-    body("email", "Enter a valid email").isEmail(),
-    body("password", "Password cannot be blank").exists(),
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    let success = false;
-    //  If there is any error return error 400 status with the error
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success,
-        message: "Enter Correct Credentials",
-        errors: errors.array(),
-      });
-    }
-    // Using destructuring get the values of email and password
-    const { email, password } = req.body;
-    // Put everything inside the try block so that if any error occur then,
-    // we can handle in the catch block
-    try {
-      // Check if there exists a user with this email id
-      const user = await User.findOne({ email: email });
-      // If doesn't exists then return error with message to use correct credentials
-      if (!user) {
-        return res
-          .status(400)
-          .json({ success, message: "try to log in with correct credentials" });
-      }
-      // Compare the password user has enered with the saved password
-      // do not worry about hash and salt node js will take care care of that.
-      const comparePassword = await bcrypt.compare(password, user.password);
-      // If password doesn't match then return error with message to use correct credentials
-      if (!comparePassword) {
-        return res
-          .status(400)
-          .json({ success, message: "try to log in with correct credentials" });
-      }
-
-      //else  create a authtoken with the user id and your signature
-      const data = {
-        user: {
-          id: user.id,
-        },
-      };
-      const authToken = jwt.sign(data, JWT_SIGNATURE);
-      success = true;
-      // Now return the auth token
-      res.json({
-        success,
-        message: "User Logged In Successfully",
-        authToken,
-        data,
-      });
-    } catch (error) {
-      // If any error occured then return status 500 with message Internal Server error
-      return res
-        .status(500)
-        .json({ success, message: "Internal Server Error", errors: error });
-    }
-  }
-);
-
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
-
-// ROUTE 3: Get loggedIn user details using:  POST "/api/auth/getuser". Note: 'Login Required'.
-
-router.post("/getuser", fetchuser, async (req, res) => {
-  let success = false;
   try {
-    const userId = req.user.id;
-    const user = await User.findById(userId).select("-password");
-    // If doesn't exists then return error with message to use correct credentials
-    success = true;
-    return res.json({
-      success,
-      message: "User Data fetched Successfully",
-      user,
-    });
+    // Check if the user exists
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    otpStore.set(email, otp);
+
+    // TODO: Actually send the email using the sendMail utility
+    const emailSent = await sendMail(email, "Your OTP", `Your One-Time Password is: ${otp}`);
+    if (!emailSent) {
+      return res.status(500).json({ success: false, message: "Failed to send OTP email" });
+    }
+
+    console.log(`OTP for ${email}: ${otp}`);
+
+    res.json({ success: true, message: "OTP sent successfully" });
   } catch (error) {
-    // If any error occured then return status 500 with message Internal Server error
-    console.log(error.message);
-    return res
-      .status(500)
-      .json({ success, message: "Internal Server Error", errors: error });
+    console.error("Error in send-otp:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
-/* ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+// POST /api/auth/login
+router.post("/login", async (req, res) => {
+  const { email, otp } = req.body;
 
-// EXPORT
+  try {
+    // Find the user to get their ID
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
 
-module.exports = router;
+    // Validate OTP
+    if (!otpStore.has(email) || otpStore.get(email) !== otp) {
+      return res.status(401).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    // Clear OTP after use
+    otpStore.delete(email);
+
+    // Generate JWT with the user's ID
+    const payload = {
+      user: {
+        id: user.id,
+      },
+    };
+    const token = jwt.sign(payload, process.env.JWT_SECRET || "hexa", {
+      expiresIn: "1h",
+    });
+
+    res.json({ success: true, authToken: token, message: "Login successful" });
+
+  } catch (error) {
+    console.error("Error in login:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.post("/signup", async (req, res) => {
+  const { email, fullName, dob, otp } = req.body;
+
+  try {
+    // Validate OTP
+    if (!otpStore.has(email) || otpStore.get(email) !== otp) {
+      return res.status(401).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    // Clear OTP after use
+    otpStore.delete(email);
+
+    const user = await User.create({
+      fullName: fullName,
+      email: email,
+      dob: dob,
+      isVerified: true
+    });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not created" });
+    }
+
+    // Generate JWT with the user's ID
+    const payload = {
+      user: {
+        id: user.id,
+      },
+    };
+    const token = jwt.sign(payload, process.env.JWT_SECRET || "hexa", {
+      expiresIn: "1h",
+    });
+
+    res.json({ success: true, authToken: token, message: "Signup successful" });
+
+  } catch (error) {
+    console.error("Error in login:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+})
+
+export default router;
