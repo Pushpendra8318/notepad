@@ -11,8 +11,12 @@ const app = express();
 app.use(express.json());
 connectDB();
 
-// Allow frontend (React Vite: 5173 or CRA: 3000)
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND, 
+    credentials: true,        
+  })
+);
 
 // Routes
 app.use("/api/auth", authRouter);
