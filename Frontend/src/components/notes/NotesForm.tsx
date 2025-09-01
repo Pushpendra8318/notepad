@@ -25,6 +25,7 @@ type NoteFormValues = z.infer<typeof formSchema>;
 
 interface NotesFormProps {
   initialData?: Note | null;
+  handleSubmit: () => void;
 }
 
 const NotesForm: FC<NotesFormProps> = ({ initialData }) => {
